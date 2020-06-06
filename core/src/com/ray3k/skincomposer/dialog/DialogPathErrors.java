@@ -71,9 +71,22 @@ public class DialogPathErrors extends Dialog {
         table.add(label);
         
         table.row();
-        label = new Label("The following assets could not be found. Please resolve by clicking the associated button.", skin);
+        label = new Label("The following assets could not be found. Please choose the resources path:", skin);
         label.setAlignment(Align.center);
         table.add(label).padBottom(0);
+        
+        table.row();
+        var textButton = new TextButton("Path...", skin);
+        table.add(textButton);
+        textButton.addListener(main.getHandListener());
+        textButton.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                var path = main.getDesktopWorker().selectFolder("Select Path", new FileHandle(main.getProjectData().getLastDrawablePath()));
+                resolveAssetsFromFolder(path, drawables, fonts, freeTypeFonts);
+                resetDrawableTable(main, skin, drawables, fonts, freeTypeFonts);
+            }
+        });
         
         table.row();
         dataTable = new Table();
@@ -101,60 +114,21 @@ public class DialogPathErrors extends Dialog {
         dataTable.clear();
         
         if (drawables.size > 0) {
-            Label label = new Label("Drawable Name", skin, "black");
+            Label label = new Label("Drawable File Name", skin, "black");
             dataTable.add(label);
-
-            label = new Label("Path", skin, "black");
-            dataTable.add(label);
-
-            dataTable.add();
 
             label = new Label("Found?", skin, "black");
             dataTable.add(label);
 
             dataTable.row();
             Image image = new Image(skin, "welcome-separator");
-            dataTable.add(image).colspan(4).pad(5.0f).padLeft(0.0f).padRight(0.0f).growX();
+            dataTable.add(image).colspan(2).pad(5.0f).padLeft(0.0f).padRight(0.0f).growX();
 
 
             for (DrawableData drawable : drawables) {
                 dataTable.row();
-                label = new Label(drawable.name, skin);
+                label = new Label(drawable.file.name(), skin);
                 dataTable.add(label);
-
-                label = new Label(drawable.file.path(), skin);
-                label.setWrap(true);
-                label.setAlignment(Align.left);
-                dataTable.add(label).growX();
-
-                TextButton textButton = new TextButton("browse...", skin);
-                textButton.addListener(main.getHandListener());
-                dataTable.add(textButton).padLeft(10.0f);
-
-                textButton.addListener(new ChangeListener() {
-                    @Override
-                    public void changed(ChangeListener.ChangeEvent event,
-                            Actor actor) {
-                        DesktopWorker desktopWorker = main.getDesktopWorker();
-                        String[] filterPatterns = null;
-                        if (!Utils.isMac()) {
-                            filterPatterns = new String[] {"*.png", "*.jpg", "*.jpeg", "*.bmp", "*.gif"};
-                        }
-                        
-                        var defaultPath = drawable.file.parent().exists() ? drawable.file.parent().path() + "/": "";
-
-                        File file = desktopWorker.openDialog("Locate " + drawable.file.name() + "...", defaultPath, filterPatterns, "Image files");
-                        if (file != null) {
-                            FileHandle fileHandle = new FileHandle(file);
-                            drawable.file = fileHandle;
-                            if (!foundDrawables.contains(drawable, true)) {
-                                foundDrawables.add(drawable);
-                            }
-                            resolveAssetsFromFolder(fileHandle.parent(), drawables, fonts, freeTypeFonts);
-                            resetDrawableTable(main, skin, drawables, fonts, freeTypeFonts);
-                        }
-                    }
-                });
 
                 if (foundDrawables.contains(drawable, true)) {
                     label = new Label("YES", skin, "white");
@@ -168,20 +142,15 @@ public class DialogPathErrors extends Dialog {
 
                 dataTable.row();
                 image = new Image(skin, "welcome-separator");
-                dataTable.add(image).colspan(4).pad(5.0f).padLeft(0.0f).padRight(0.0f).growX();
+                dataTable.add(image).colspan(2).pad(5.0f).padLeft(0.0f).padRight(0.0f).growX();
             }
         }
         
         if (fonts.size > 0) {
             dataTable.row();
             dataTable.defaults().padTop(20.0f);
-            Label label = new Label("Font Name", skin, "black");
+            Label label = new Label("Font File Name", skin, "black");
             dataTable.add(label);
-
-            label = new Label("Path", skin, "black");
-            dataTable.add(label);
-
-            dataTable.add();
 
             label = new Label("Found?", skin, "black");
             dataTable.add(label);
@@ -189,47 +158,13 @@ public class DialogPathErrors extends Dialog {
             dataTable.defaults().reset();
             dataTable.row();
             Image image = new Image(skin, "welcome-separator");
-            dataTable.add(image).colspan(4).pad(5.0f).padLeft(0.0f).padRight(0.0f).growX();
+            dataTable.add(image).colspan(2).pad(5.0f).padLeft(0.0f).padRight(0.0f).growX();
 
 
             for (FontData font : fonts) {
                 dataTable.row();
-                label = new Label(font.getName(), skin);
+                label = new Label(font.file.name(), skin);
                 dataTable.add(label);
-
-                label = new Label(font.file.path(), skin);
-                label.setWrap(true);
-                label.setAlignment(Align.left);
-                dataTable.add(label).growX();
-
-                TextButton textButton = new TextButton("browse...", skin);
-                textButton.addListener(main.getHandListener());
-                dataTable.add(textButton);
-
-                textButton.addListener(new ChangeListener() {
-                    @Override
-                    public void changed(ChangeListener.ChangeEvent event,
-                            Actor actor) {
-                        DesktopWorker desktopWorker = main.getDesktopWorker();
-                        String[] filterPatterns = null;
-                        if (!Utils.isMac()) {
-                            filterPatterns = new String[] {"*.fnt"};
-                        }
-                        
-                        var defaultPath = font.file.parent().exists() ? font.file.parent().path() + "/": "";
-
-                        File file = desktopWorker.openDialog("Locate " + font.file.name() + "...", defaultPath, filterPatterns, "Font files");
-                        if (file != null) {
-                            FileHandle fileHandle = new FileHandle(file);
-                            font.file = fileHandle;
-                            if (!foundFonts.contains(font, true)) {
-                                foundFonts.add(font);
-                            }
-                            resolveAssetsFromFolder(fileHandle.parent(), drawables, fonts, freeTypeFonts);
-                            resetDrawableTable(main, skin, drawables, fonts, freeTypeFonts);
-                        }
-                    }
-                });
 
                 if (foundFonts.contains(font, true)) {
                     label = new Label("YES", skin, "white");
@@ -250,13 +185,8 @@ public class DialogPathErrors extends Dialog {
         if (freeTypeFonts.size > 0) {
             dataTable.row();
             dataTable.defaults().padTop(20.0f);
-            Label label = new Label("FreeTypeFont Name", skin, "black");
+            Label label = new Label("FreeType Font File", skin, "black");
             dataTable.add(label);
-        
-            label = new Label("Path", skin, "black");
-            dataTable.add(label);
-        
-            dataTable.add();
         
             label = new Label("Found?", skin, "black");
             dataTable.add(label);
@@ -264,47 +194,13 @@ public class DialogPathErrors extends Dialog {
             dataTable.defaults().reset();
             dataTable.row();
             Image image = new Image(skin, "welcome-separator");
-            dataTable.add(image).colspan(4).pad(5.0f).padLeft(0.0f).padRight(0.0f).growX();
+            dataTable.add(image).colspan(2).pad(5.0f).padLeft(0.0f).padRight(0.0f).growX();
         
         
             for (var font : freeTypeFonts) {
                 dataTable.row();
-                label = new Label(font.name, skin);
+                label = new Label(font.file.name(), skin);
                 dataTable.add(label);
-            
-                label = new Label(font.file.path(), skin);
-                label.setWrap(true);
-                label.setAlignment(Align.left);
-                dataTable.add(label).growX();
-            
-                TextButton textButton = new TextButton("browse...", skin);
-                textButton.addListener(main.getHandListener());
-                dataTable.add(textButton);
-            
-                textButton.addListener(new ChangeListener() {
-                    @Override
-                    public void changed(ChangeListener.ChangeEvent event,
-                                        Actor actor) {
-                        DesktopWorker desktopWorker = main.getDesktopWorker();
-                        String[] filterPatterns = null;
-                        if (!Utils.isMac()) {
-                            filterPatterns = new String[] {"*.ttf"};
-                        }
-                    
-                        var defaultPath = font.file.parent().exists() ? font.file.parent().path() + "/": "";
-                    
-                        File file = desktopWorker.openDialog("Locate " + font.file.name() + "...", defaultPath, filterPatterns, "TTF files");
-                        if (file != null) {
-                            FileHandle fileHandle = new FileHandle(file);
-                            font.file = fileHandle;
-                            if (!foundFreeTypeFonts.contains(font, true)) {
-                                foundFreeTypeFonts.add(font);
-                            }
-                            resolveAssetsFromFolder(fileHandle.parent(), drawables, fonts, freeTypeFonts);
-                            resetDrawableTable(main, skin, drawables, fonts, freeTypeFonts);
-                        }
-                    }
-                });
             
                 if (foundFreeTypeFonts.contains(font, true)) {
                     label = new Label("YES", skin, "white");
@@ -318,15 +214,19 @@ public class DialogPathErrors extends Dialog {
             
                 dataTable.row();
                 image = new Image(skin, "welcome-separator");
-                dataTable.add(image).colspan(4).pad(5.0f).padLeft(0.0f).padRight(0.0f).growX();
+                dataTable.add(image).colspan(2).pad(5.0f).padLeft(0.0f).padRight(0.0f).growX();
             }
         }
         
         dataTable.row();
-        dataTable.add().grow().colspan(4);
+        dataTable.add().grow().colspan(2);
     }
 
     private void resolveAssetsFromFolder(FileHandle folder, Array<DrawableData> drawables, Array<FontData> fonts, Array<FreeTypeFontData> freeTypeFonts) {
+        foundDrawables.clear();
+        foundFonts.clear();
+        foundFreeTypeFonts.clear();
+        
         if (folder.isDirectory()) {
             for (DrawableData drawable : drawables) {
                 if (!foundDrawables.contains(drawable, true)) {

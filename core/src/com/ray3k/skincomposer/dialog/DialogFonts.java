@@ -1141,11 +1141,6 @@ public class DialogFonts extends Dialog {
                 Gdx.app.error(getClass().getName(), "Error creating preview font from file", e);
                 main.getDialogFactory().showDialogError("Preview Error...", "Error creating preview font from file. Check file paths.\n\nOpen log?");
             }
-        } else {
-            //after all fonts are processed
-            if (main.getProjectData().areResourcesRelative()) {
-                main.getProjectData().makeResourcesRelative();
-            }
         }
     }
     

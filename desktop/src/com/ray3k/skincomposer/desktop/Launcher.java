@@ -44,6 +44,7 @@ import com.ray3k.skincomposer.TextFileApplicationLogger;
 import com.ray3k.skincomposer.utils.Utils;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
+import org.lwjgl.util.tinyfd.TinyFileDialogs;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -234,6 +235,13 @@ public class Launcher implements DesktopWorker, Lwjgl3WindowListener {
         } else {
             return null;
         }
+    }
+    
+    @Override
+    public FileHandle selectFolder(String title, FileHandle defaultPath) {
+        var result = TinyFileDialogs.tinyfd_selectFolderDialog(title, defaultPath.path());
+        if (result != null) return new FileHandle(result);
+        else return null;
     }
     
     @Override

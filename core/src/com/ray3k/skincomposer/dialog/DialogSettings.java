@@ -39,7 +39,6 @@ import com.ray3k.skincomposer.utils.Utils;
 
 public class DialogSettings extends Dialog {
     private Integer maxUndos;
-    private boolean resourcesRelative;
     private boolean allowingWelcome;
     private boolean exportWarnings;
     private boolean allowingUpdates;
@@ -50,7 +49,6 @@ public class DialogSettings extends Dialog {
         this.main = main;
 
         maxUndos = main.getProjectData().getMaxUndos();
-        resourcesRelative = main.getProjectData().areResourcesRelative();
         allowingWelcome = main.getProjectData().isAllowingWelcome();
         exportWarnings = main.getProjectData().isShowingExportWarnings();
         allowingUpdates = main.getProjectData().isCheckingForUpdates();
@@ -65,7 +63,6 @@ public class DialogSettings extends Dialog {
         if ((boolean) object) {
             main.getProjectData().setChangesSaved(false);
             main.getProjectData().setMaxUndos(maxUndos);
-            main.getProjectData().setResourcesRelative(resourcesRelative);
             main.getProjectData().setAllowingWelcome(allowingWelcome);
             main.getProjectData().setShowingExportWarnings(exportWarnings);
             main.getProjectData().setCheckingForUpdates(allowingUpdates);
@@ -223,18 +220,6 @@ public class DialogSettings extends Dialog {
         t.add(table);
         
         table.defaults().expandX().left().space(5);
-        var relativeCheckBox = new ImageTextButton("Keep resources relative?", getSkin(), "checkbox");
-        relativeCheckBox.setChecked(resourcesRelative);
-        relativeCheckBox.addListener(main.getHandListener());
-        relativeCheckBox.addListener(new ChangeListener() {
-            @Override
-            public void changed(ChangeListener.ChangeEvent event, Actor actor) {
-                resourcesRelative = relativeCheckBox.isChecked();
-            }
-        });
-        table.add(relativeCheckBox);
-        
-        table.row();
         var welcomeCheckBox = new ImageTextButton("Show welcome screen?", getSkin(), "checkbox");
         welcomeCheckBox.setChecked(allowingWelcome);
         welcomeCheckBox.addListener(main.getHandListener());

@@ -26,6 +26,7 @@ package com.ray3k.skincomposer.dialog;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.scenes.scene2d.Action;
 import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.actions.Actions;
 import com.badlogic.gdx.scenes.scene2d.actions.DelayAction;
 import com.badlogic.gdx.scenes.scene2d.actions.RunnableAction;
 import com.badlogic.gdx.scenes.scene2d.actions.SequenceAction;
@@ -62,8 +63,7 @@ public class DialogLoading extends Dialog {
             });
             thread.start();
         });
-        Action action = new SequenceAction(new DelayAction(.5f), runnableAction);
-        addAction(action);
+        addAction(Actions.sequence(Actions.alpha(1), Actions.delay(.5f), runnableAction));
         
         return dialog;
     }

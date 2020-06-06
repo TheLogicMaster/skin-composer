@@ -73,6 +73,12 @@ public class DrawableData {
         customized = false;
         minWidth = -1;
         minHeight = -1;
+    
+        if (Utils.isNinePatch(file.name())) {
+            type = DrawableType.NINE_PATCH;
+        } else {
+            type = DrawableType.TEXTURE;
+        }
     }
     
     public DrawableData(String customName) {

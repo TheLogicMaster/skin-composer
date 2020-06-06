@@ -1,5 +1,6 @@
 ### Skin Composer Version 35 ###
 
+* **BREAKING CHANGE**: Completely changed the way Texture Regions and Fonts are added to a project. Instead of adding files individually, you must specify a single resources directory that holds all of your images. This path is recorded relative to the save path, making Skin Composer projects to be more portable. The "Keep Resources Relative" option is now redundant and removed. All old projects will require you to specify the resources path before they can be opened. This enables using texture regions in sub directories and resolves duplicated resource path issues.   
 * Added Scene Composer to generate basic GUI's with a visual editor.
 * Added submenu controls in dialogs to clean up interface.
 * Added duplicate option for Tinted and Tiled Drawables.

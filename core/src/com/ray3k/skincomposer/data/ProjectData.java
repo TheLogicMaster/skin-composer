@@ -30,12 +30,17 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.utils.*;
 import com.ray3k.skincomposer.Main;
+import com.ray3k.skincomposer.data.DrawableData.DrawableType;
 import com.ray3k.skincomposer.data.JsonData.ExportFormat;
 import com.ray3k.skincomposer.dialog.scenecomposer.DialogSceneComposerModel;
 import com.ray3k.skincomposer.dialog.scenecomposer.DialogSceneComposerModel.SimRootGroup;
 import com.ray3k.skincomposer.utils.Utils;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Iterator;
+import java.util.Locale;
 
 public class ProjectData implements Json.Serializable {
     private static Preferences generalPref;
@@ -49,6 +54,7 @@ public class ProjectData implements Json.Serializable {
     private final AtlasData atlasData;
     private String loadedVersion;
     private Json json;
+    private String resourcesPath;
     
     public ProjectData() {
         json = new Json(JsonWriter.OutputType.minimal);
@@ -92,6 +98,7 @@ public class ProjectData implements Json.Serializable {
         changesSaved = false;
         newProject = true;
         loadedVersion = Main.VERSION;
+        resourcesPath = "";
         preferences = new ObjectMap<>();
         generalPref = Gdx.app.getPreferences("com.ray3k.skincomposer");
         clear();
@@ -343,50 +350,8 @@ public class ProjectData implements Json.Serializable {
         }
     }
     
-    public void makeResourcesRelative(FileHandle saveFile) {
-        FileHandle targetFolder = saveFile.sibling(saveFile.nameWithoutExtension() + "_data/");
-        
-        for (DrawableData drawableData : main.getAtlasData().getDrawables()) {
-            if (drawableData.file != null && drawableData.file.exists() && !targetFolder.equals(drawableData.file.parent())) {
-                targetFolder.mkdirs();
-                drawableData.file.copyTo(targetFolder);
-                drawableData.file = targetFolder.child(drawableData.file.name());
-            }
-        }
-        
-        for (DrawableData drawableData : main.getAtlasData().getFontDrawables()) {
-            if (drawableData.file.exists() && !targetFolder.equals(drawableData.file.parent())) {
-                targetFolder.mkdirs();
-                drawableData.file.copyTo(targetFolder);
-                drawableData.file = targetFolder.child(drawableData.file.name());
-            }
-        }
-        
-        for (FontData fontData : main.getJsonData().getFonts()) {
-            if (fontData.file.exists() && !targetFolder.equals(fontData.file.parent())) {
-                fontData.file.copyTo(targetFolder);
-                fontData.file = targetFolder.child(fontData.file.name());
-            }
-        }
-        
-        for (FreeTypeFontData fontData : main.getJsonData().getFreeTypeFonts()) {
-            if (fontData.file != null && fontData.file.exists() && !targetFolder.equals(fontData.file.parent())) {
-                fontData.file.copyTo(targetFolder);
-                fontData.file = targetFolder.child(fontData.file.name());
-            }
-        }
-    }
-    
-    public void makeResourcesRelative() {
-        makeResourcesRelative(saveFile);
-    }
-    
     public void save(FileHandle file) {
         moveImportedFiles(saveFile, file);
-        
-        if (main.getProjectData().areResourcesRelative()) {
-            makeResourcesRelative(file);
-        }
         
         saveFile = file;
         putRecentFile(file.path());
@@ -419,9 +384,10 @@ public class ProjectData implements Json.Serializable {
         setLastOpenSavePath(file.parent().path() + "/");
         atlasData.atlasCurrent = false;
         loadedVersion = instance.loadedVersion;
-        
-        correctFilePaths();
-        
+    
+        resourcesPath = instance.resourcesPath;
+        loadResourcePath(getResourcesFile());
+    
         if (verifyDrawablePaths().size == 0 && verifyFontPaths().size == 0) {
             main.getAtlasData().produceAtlas();
             main.getRootTable().populate();
@@ -438,70 +404,45 @@ public class ProjectData implements Json.Serializable {
     public Array<DrawableData> verifyDrawablePaths() {
         Array<DrawableData> errors = new Array<>();
         
-        if (!areResourcesRelative()) {
-            for (DrawableData drawable : atlasData.getDrawables()) {
-                if (!drawable.customized && (drawable.file == null || !drawable.file.exists())) {
+        for (DrawableData drawable : atlasData.getDrawables()) {
+            if (!drawable.customized) {
+                if (drawable.file == null) {
                     errors.add(drawable);
-                }
-            }
-            
-            for (DrawableData drawable : atlasData.getFontDrawables()) {
-                if (!drawable.customized && (drawable.file == null || !drawable.file.exists())) {
-                    errors.add(drawable);
-                }
-            }
-        } else {
-            FileHandle targetFolder = saveFile.sibling(saveFile.nameWithoutExtension() + "_data/");
-            
-            for (DrawableData drawable : atlasData.getDrawables()) {
-                if (!drawable.customized) {
-                    if (drawable.file == null) {
+                } else {
+                    FileHandle localFile = getResourcesFile().child(drawable.file.name());
+                    if (!localFile.exists()) {
                         errors.add(drawable);
-                    } else {
-                        FileHandle localFile = targetFolder.child(drawable.file.name());
-                        if (!localFile.exists()) {
-                            errors.add(drawable);
-                        }
-                    }
-                }
-            }
-            
-            for (DrawableData drawable : atlasData.getFontDrawables()) {
-                if (!drawable.customized) {
-                    if (drawable.file == null) {
-                        errors.add(drawable);
-                    } else {
-                        FileHandle localFile = targetFolder.child(drawable.file.name());
-                        if (!localFile.exists()) {
-                            errors.add(drawable);
-                        }
                     }
                 }
             }
         }
+        
+        for (DrawableData drawable : atlasData.getFontDrawables()) {
+            if (!drawable.customized) {
+                if (drawable.file == null) {
+                    errors.add(drawable);
+                } else {
+                    FileHandle localFile = getResourcesFile().child(drawable.file.name());
+                    if (!localFile.exists()) {
+                        errors.add(drawable);
+                    }
+                }
+            }
+        }
+        
         return errors;
     }
     
     public Array<FontData> verifyFontPaths() {
         Array<FontData> errors = new Array<>();
-        
-        if (!areResourcesRelative()) {
-            for (FontData font : jsonData.getFonts()) {
-                if (font.file == null || !font.file.exists()) {
+    
+        for (FontData font : jsonData.getFonts()) {
+            if (font.file == null) {
+                errors.add(font);
+            } else {
+                FileHandle localFile = getResourcesFile().child(font.file.name());
+                if (!localFile.exists()) {
                     errors.add(font);
-                }
-            }
-        } else {
-            FileHandle targetFolder = saveFile.sibling(saveFile.nameWithoutExtension() + "_data/");
-            
-            for (FontData font : jsonData.getFonts()) {
-                if (font.file == null) {
-                    errors.add(font);
-                } else {
-                    FileHandle localFile = targetFolder.child(font.file.name());
-                    if (!localFile.exists()) {
-                        errors.add(font);
-                    }
                 }
             }
         }
@@ -510,63 +451,18 @@ public class ProjectData implements Json.Serializable {
     
     public Array<FreeTypeFontData> verifyFreeTypeFontPaths() {
         Array<FreeTypeFontData> errors = new Array<>();
-        
-        if (!areResourcesRelative()) {
-            for (var font : jsonData.getFreeTypeFonts()) {
-                if (font.file == null || !font.file.exists()) {
+    
+        for (var font : jsonData.getFreeTypeFonts()) {
+            if (font.file == null) {
+                errors.add(font);
+            } else {
+                FileHandle localFile = getResourcesFile().child(font.file.name());
+                if (!localFile.exists()) {
                     errors.add(font);
-                }
-            }
-        } else {
-            FileHandle targetFolder = saveFile.sibling(saveFile.nameWithoutExtension() + "_data/");
-            
-            for (var font : jsonData.getFreeTypeFonts()) {
-                if (font.file == null) {
-                    errors.add(font);
-                } else {
-                    FileHandle localFile = targetFolder.child(font.file.name());
-                    if (!localFile.exists()) {
-                        errors.add(font);
-                    }
                 }
             }
         }
         return errors;
-    }
-    
-    private void correctFilePaths() {
-        FileHandle targetFolder = saveFile.sibling(saveFile.nameWithoutExtension() + "_data/");
-        
-        boolean resourcesRelative = main.getProjectData().areResourcesRelative();
-        
-        if (targetFolder.exists()) {
-            for (DrawableData drawableData : atlasData.getDrawables()) {
-                if (resourcesRelative || drawableData.file != null && !drawableData.file.exists()) {
-                    FileHandle newFile = targetFolder.child(drawableData.file.name());
-                    if (newFile.exists()) {
-                        drawableData.file = newFile;
-                    }
-                }
-            }
-            
-            for (DrawableData drawableData : atlasData.getFontDrawables()) {
-                if (resourcesRelative || drawableData.file != null && !drawableData.file.exists()) {
-                    FileHandle newFile = targetFolder.child(drawableData.file.name());
-                    if (newFile.exists()) {
-                        drawableData.file = newFile;
-                    }
-                }
-            }
-            
-            for (FontData fontData : jsonData.getFonts()) {
-                if (resourcesRelative || !fontData.file.exists()) {
-                    FileHandle newFile = targetFolder.child(fontData.file.name());
-                    if (newFile.exists()) {
-                        fontData.file = newFile;
-                    }
-                }
-            }
-        }
     }
     
     public void load() {
@@ -578,7 +474,6 @@ public class ProjectData implements Json.Serializable {
 
         randomizeId();
         setMaxUndos(30);
-        setResourcesRelative(false);
         
         jsonData.clear();
         atlasData.clear();
@@ -591,6 +486,8 @@ public class ProjectData implements Json.Serializable {
         }
         setChangesSaved(false);
         newProject = true;
+        loadedVersion = Main.VERSION;
+        resourcesPath = "";
     }
 
     @Override
@@ -605,6 +502,7 @@ public class ProjectData implements Json.Serializable {
         }
         json.writeValue("version", Main.VERSION);
         json.writeValue("sceneComposer", DialogSceneComposerModel.rootActor);
+        json.writeValue("resourcesPath", resourcesPath);
     }
 
     @Override
@@ -619,6 +517,7 @@ public class ProjectData implements Json.Serializable {
         }
     
         loadedVersion = jsonValue.getString("version", "none");
+        resourcesPath = jsonValue.getString("resourcesPath", "");
         DialogSceneComposerModel.rootActor = json.readValue("sceneComposer", SimRootGroup.class, jsonValue);
     }
 
@@ -690,14 +589,6 @@ public class ProjectData implements Json.Serializable {
         generalPref.flush();
     }
     
-    public boolean areResourcesRelative() {
-        return (boolean) preferences.get("resources-relative", false);
-    }
-    
-    public void setResourcesRelative(boolean resourcesRelative) {
-        preferences.put("resources-relative", resourcesRelative);
-    }
-    
     public boolean isUsingSimpleNames() {
         return (boolean) preferences.get("simple-names", false);
     }
@@ -739,26 +630,6 @@ public class ProjectData implements Json.Serializable {
     }
     
     /**
-     * Returns true if file exists and depending on the state of relative resources
-     * and save file state.
-     * @param file
-     * @return 
-     */
-    public boolean resourceExists(FileHandle file) {
-        FileHandle targetDirectory = (saveFile != null) ? saveFile.sibling(saveFile.nameWithoutExtension() + "_data/") : Main.appFolder.child("temp/" + getId() + "_data/");
-        if (!areResourcesRelative()) {
-            if (!file.exists() && !targetDirectory.child(file.name()).exists()) {
-                return false;
-            }
-        } else {
-            if (targetDirectory == null || !targetDirectory.child(file.name()).exists()) {
-                return false;
-            }
-        }
-        return true;
-    }
-    
-    /**
      * Checks if this is an old project and has drawables with minWidth or minHeight incorrectly set to 0. This error
      * was resolved in version 30.
      * @return
@@ -786,5 +657,64 @@ public class ProjectData implements Json.Serializable {
                 drawable.minHeight = -1;
             }
         }
+    }
+    
+    /**
+     * Loads the Drawables and Fonts located at the specified path. All previous textures and font data will be discarded.
+     * @param path
+     */
+    public void loadResourcePath(FileHandle path) {
+        //drawables
+        //remove all textures and nine patches
+        var iter = atlasData.getDrawables().iterator();
+        while (iter.hasNext()) {
+            var data = iter.next();
+            if (data.type == DrawableType.TEXTURE || data.type == DrawableType.NINE_PATCH) iter.remove();
+        }
+    
+        //gather new texture files
+        var textures = new Array<FileHandle>();
+        try {
+            Files.walk(Paths.get(path.path())).filter(Files::isRegularFile).forEach((f) -> {
+                var lc = f.toString().toLowerCase(Locale.ROOT);
+                if (lc.endsWith(".png") || lc.endsWith(".jpg") || lc.endsWith(".jpeg") || lc.endsWith(
+                        ".bmp") || lc.endsWith(".gif")) {
+                    textures.add(new FileHandle(f.toFile()));
+                }
+            });
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        
+        //add new drawables
+        for (var texture : textures) {
+            var drawable = new DrawableData(texture);
+            
+            //prefer 9 patch variants
+            var existingDrawable = atlasData.getDrawable(drawable.name);
+            if (existingDrawable != null) {
+                if (existingDrawable.type == DrawableType.TEXTURE) {
+                    atlasData.getDrawables().removeValue(existingDrawable, true);
+                    atlasData.getDrawables().add(drawable);
+                }
+            } else atlasData.getDrawables().add(drawable);
+        }
+    
+        //produce the atlas so that DrawableData to Drawable pairs are generated
+        atlasData.atlasCurrent = false;
+        atlasData.produceAtlas();
+        
+        //set path variable
+        if (saveFile == null) resourcesPath = path.path();
+        else resourcesPath = Paths.get(saveFile.parent().path()).relativize(Paths.get(path.path())).toString().replace('\\', '/');
+    }
+    
+    public String getResourcesPath() {
+        return resourcesPath;
+    }
+    
+    public FileHandle getResourcesFile() {
+        if (Paths.get(resourcesPath).isAbsolute()) return new FileHandle(resourcesPath);
+        else return new FileHandle(Paths.get(saveFile.parent().path(), resourcesPath).toString());
     }
 }

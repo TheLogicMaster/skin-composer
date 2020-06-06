@@ -42,6 +42,7 @@ public interface DesktopWorker {
     public void setCloseListener(CloseListener closeListener);
     public void attachLogListener();
     public List<File> openMultipleDialog(String title, String defaultPath, String[] filterPatterns, String filterDescription);
+    public FileHandle selectFolder(String title, FileHandle defaultPath);
     public File openDialog(String title, String defaultPath, String[] filterPatterns, String filterDescription);
     public File saveDialog(String title, String defaultPath, String[] filterPatterns, String filterDescription);
     public void closeSplashScreen();

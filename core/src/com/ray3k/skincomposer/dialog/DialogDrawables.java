@@ -54,9 +54,6 @@ import com.ray3k.skincomposer.utils.Utils;
 import com.ray3k.stripe.PopTableClickListener;
 import com.ray3k.stripe.Spinner;
 
-import java.io.File;
-import java.util.Iterator;
-import java.util.List;
 import java.util.Locale;
 
 public class DialogDrawables extends Dialog {
@@ -120,30 +117,10 @@ public class DialogDrawables extends Dialog {
         this.listener = listener;
         
         filesDroppedListener = (Array<FileHandle> files) -> {
-            Iterator<FileHandle> iter = files.iterator();
-            while (iter.hasNext()) {
-                FileHandle file = iter.next();
-                if (file.isDirectory()) {
-                    files.addAll(file.list());
-                    iter.remove();
-                } else if (!(file.name().toLowerCase().endsWith(".png") || file.name().toLowerCase().endsWith(".jpg") || file.name().toLowerCase().endsWith(".jpeg") || file.name().toLowerCase().endsWith(".bmp") || file.name().toLowerCase().endsWith(".gif"))) {
-                    iter.remove();
-                }
-            }
-            
-            var filesLimited = new Array<FileHandle>(files);
-            iter = filesLimited.iterator();
-            while (iter.hasNext()) {
-                var file = iter.next();
-                if (!file.name().toLowerCase(Locale.ROOT).endsWith(".9.png")) {
-                    if (files.contains(file.sibling(file.nameWithoutExtension() + ".9.png"), false)) {
-                        iter.remove();
-                    }
-                }
-            }
-            
-            if (filesLimited.size > 0) {
-                drawablesSelected(filesLimited);
+            if (files.size > 0) {
+                var file = files.first();
+                if (file.isDirectory()) chooseResourcesPath(file);
+                else chooseResourcesPath(file.parent());
             }
         };
         
@@ -177,13 +154,14 @@ public class DialogDrawables extends Dialog {
         
         getContentTable().row();
         Table table = new Table(getSkin());
-        table.defaults().pad(6.0f);
+        table.pad(10);
+        table.defaults().space(5);
         getContentTable().add(table).growX();
         
         var button = new Button(getSkin(), "filter");
         button.setName("filter");
         button.setProgrammaticChangeEvents(false);
-        table.add(button);
+        table.add(button).space(20);
         button.addListener(main.getHandListener());
         button.addListener(new ChangeListener() {
             @Override
@@ -225,8 +203,19 @@ public class DialogDrawables extends Dialog {
         sortSelectBox.getList().addListener(main.getHandListener());
         table.add(sortSelectBox);
         
-        TextButton textButton = new TextButton("Add...", getSkin());
-        table.add(textButton);
+        var textField = new TextField("", getSkin());
+        textField.setName("path-field");
+        textField.setDisabled(true);
+        textField.setText(main.getProjectData().getResourcesPath());
+        table.add(textField).spaceLeft(20);
+        
+        var textButton = new TextButton("Path...", getSkin());
+        table.add(textButton).spaceLeft(2);
+        textButton.addListener(main.getHandListener());
+        textButton.addListener(new PathListener());
+    
+        textButton = new TextButton("Add...", getSkin());
+        table.add(textButton).space(20);
         textButton.addListener(main.getHandListener());
         textButton.addListener(new AddClickListener());
         
@@ -281,6 +270,31 @@ public class DialogDrawables extends Dialog {
         });
     }
     
+    public class PathListener extends ChangeListener {
+        @Override
+        public void changed(ChangeEvent event, Actor actor) {
+            var path = main.getDesktopWorker().selectFolder("Select Path", new FileHandle(main.getProjectData().getLastDrawablePath()));
+            if (path != null) chooseResourcesPath(path);
+        }
+    }
+    
+    private void chooseResourcesPath(FileHandle path) {
+        main.getDialogFactory().showDialogLoading(() -> {
+            Gdx.app.postRunnable(() -> {
+                main.getProjectData().loadResourcePath(path);
+
+                TextField textField = findActor("path-field");
+                textField.setText(main.getProjectData().getResourcesPath());
+                textField.setCursorPosition(textField.getText().length() - 1);
+
+                main.getUndoableManager().clearUndoables();
+                main.getProjectData().setChangesSaved(false);
+                gatherDrawables();
+                sortBySelectedMode();
+            });
+        });
+    }
+    
     public class AddClickListener extends PopTableClickListener {
         public AddClickListener() {
             super(getSkin(), "more");
@@ -300,22 +314,10 @@ public class DialogDrawables extends Dialog {
                     table.hide();
                 }
             };
-            
-            var textButton = new TextButton("Image File", getSkin(), "new");
-            table.add(textButton);
-            textButton.addListener(main.getHandListener());
-            textButton.addListener(hideListener);
-            textButton.addListener(new ChangeListener() {
-                @Override
-                public void changed(ChangeListener.ChangeEvent event, Actor actor) {
-                    Gdx.graphics.setSystemCursor(Cursor.SystemCursor.Arrow);
-                    newDrawableDialog();
-                }
-            });
     
             if (showing9patchButton) {
                 table.row();
-                textButton = new TextButton("Custom Placeholder", getSkin(), "new");
+                var textButton = new TextButton("Custom Placeholder", getSkin(), "new");
                 table.add(textButton);
                 textButton.addListener(main.getHandListener());
                 textButton.addListener(hideListener);
@@ -342,7 +344,7 @@ public class DialogDrawables extends Dialog {
                                     @Override
                                     public void fileSaved(FileHandle fileHandle) {
                                         if (fileHandle.exists()) {
-                                            drawablesSelected(new Array<>(new FileHandle[]{fileHandle}));
+                                            //todo: reload drawables from the path
                                             main.getDesktopWorker().addFilesDroppedListener(filesDroppedListener);
                                         }
                                     }
@@ -1362,7 +1364,7 @@ public class DialogDrawables extends Dialog {
     }
     
     private void deleteDrawable(DrawableData drawable) {
-        if (!drawable.customized && drawable.tint == null && drawable.tintName == null && drawable.tenPatchData == null && checkDuplicateDrawables(drawable.file, 1)) {
+        if (!drawable.customized && drawable.tint == null && drawable.tintName == null && drawable.tenPatchData == null) {
             showConfirmDeleteDialog(drawable);
         } else {
             removeRegionFromTenPatches(drawable);
@@ -1402,7 +1404,6 @@ public class DialogDrawables extends Dialog {
             protected void result(Object object) {
                 if ((boolean) object) {
                     main.getProjectData().setChangesSaved(false);
-                    removeDuplicateDrawables(drawable.file);
                     removeRegionFromTenPatches(drawable);
                     gatherDrawables();
                     sortBySelectedMode();
@@ -1587,135 +1588,6 @@ public class DialogDrawables extends Dialog {
     }
     
     /**
-     * Checks if there are any drawables that have the same file name as the specified file.
-     * This ignores the file extension.
-     * @param handle
-     * @param minimum The minimum allowed matches before it's considered a duplicate
-     * @return
-     */
-    private boolean checkDuplicateDrawables(FileHandle handle, int minimum) {
-        int count = 0;
-        String name = DrawableData.proper(handle.name());
-        for (int i = 0; i < main.getAtlasData().getDrawables().size; i++) {
-            DrawableData data = main.getAtlasData().getDrawables().get(i);
-            if (data.file != null && name.equals(DrawableData.proper(data.file.name()))) {
-                count++;
-            }
-        }
-        
-        return count > minimum;
-    }
-    
-    private boolean checkDuplicateDrawables(String name, int minimum) {
-        int count = 0;
-        for (int i = 0; i < main.getAtlasData().getDrawables().size; i++) {
-            DrawableData data = main.getAtlasData().getDrawables().get(i);
-            if (data.name != null && name.equals(data.name)) {
-                count++;
-            }
-        }
-        
-        return count > minimum;
-    }
-    
-    private boolean checkDuplicateFontDrawables(String name, int minimum) {
-        int count = 0;
-        for (int i = 0; i < main.getAtlasData().getFontDrawables().size; i++) {
-            DrawableData data = main.getAtlasData().getFontDrawables().get(i);
-            if (data.name != null && name.equals(data.name)) {
-                count++;
-            }
-        }
-        
-        return count > minimum;
-    }
-    
-    /**
-     * Removes any duplicate drawables that share the same file name. This
-     * ignores the file extension and also deletes TintedDrawables from the
-     * same file. Calls removeDuplicateDrawables(handle, true).
-     * @param handle
-     */
-    private void removeDuplicateDrawables(FileHandle handle) {
-        removeDuplicateDrawables(handle, true);
-    }
-    
-    /**
-     * Removes any duplicate drawables that share the same file name. This
-     * ignores the file extension and also deletes TintedDrawables from the
-     * same file.
-     * @param handle
-     */
-    private void removeDuplicateDrawables(FileHandle handle, boolean deleteStyleValues) {
-        boolean refreshDrawables = false;
-        String name = DrawableData.proper(handle.name());
-        for (int i = 0; i < main.getAtlasData().getDrawables().size; i++) {
-            DrawableData data = main.getAtlasData().getDrawables().get(i);
-            if (name.equals(DrawableData.proper(data.file.name()))) {
-                main.getAtlasData().getDrawables().removeValue(data, true);
-                
-                if (deleteStyleValues) {
-                    for (Array<StyleData> datas : main.getJsonData().getClassStyleMap().values()) {
-                        for (StyleData tempData : datas) {
-                            for (StyleProperty prop : tempData.properties.values()) {
-                                if (prop != null && prop.type.equals(Drawable.class) && prop.value != null && prop.value.equals(data.toString())) {
-                                    prop.value = null;
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                refreshDrawables = true;
-                i--;
-            }
-        }
-        
-        main.getRootTable().refreshStyleProperties(true);
-        main.getRootTable().refreshPreview();
-        
-        if (refreshDrawables) {
-            gatherDrawables();
-        }
-    }
-    
-    /**
-     * Removes any duplicate drawables that share the same name. This does not
-     * delete TintedDrawables from the same file.
-     */
-    private void removeDuplicateDrawables(String name, boolean deleteStyleValues) {
-        boolean refreshDrawables = false;
-        for (int i = 0; i < main.getAtlasData().getDrawables().size; i++) {
-            DrawableData data = main.getAtlasData().getDrawables().get(i);
-            if (data.name != null && name.equals(data.name)) {
-                main.getAtlasData().getDrawables().removeValue(data, true);
-                
-                if (deleteStyleValues) {
-                    for (Array<StyleData> datas : main.getJsonData().getClassStyleMap().values()) {
-                        for (StyleData tempData : datas) {
-                            for (StyleProperty prop : tempData.properties.values()) {
-                                if (prop != null && prop.type.equals(Drawable.class) && prop.value != null && prop.value.equals(data.toString())) {
-                                    prop.value = null;
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                refreshDrawables = true;
-                i--;
-            }
-        }
-        
-        main.getRootTable().refreshStyleProperties(true);
-        main.getRootTable().refreshPreview();
-        
-        if (refreshDrawables) {
-            gatherDrawables();
-        }
-    }
-    
-    /**
      * Show an setStatusBarError indicating a drawable that exceeds project specifications
      */
     private void showDrawableError() {
@@ -1733,31 +1605,6 @@ public class DialogDrawables extends Dialog {
         textButton.addListener(main.getHandListener());
         dialog.button(textButton);
         dialog.show(getStage());
-    }
-    
-    private void newDrawableDialog() {
-        main.getDialogFactory().showDialogLoading(() -> {
-            String defaultPath = "";
-
-            if (main.getProjectData().getLastDrawablePath() != null) {
-                FileHandle fileHandle = new FileHandle(main.getProjectData().getLastDrawablePath());
-                if (fileHandle.parent().exists()) {
-                    defaultPath = main.getProjectData().getLastDrawablePath();
-                }
-            }
-
-            String[] filterPatterns = null;
-            if (!Utils.isMac()) {
-                filterPatterns = new String[]{"*.png", "*.jpg", "*.jpeg", "*.bmp", "*.gif"};
-            }
-
-            List<File> files = main.getDesktopWorker().openMultipleDialog("Choose drawable file(s)...", defaultPath, filterPatterns, "Image files");
-            if (files != null && files.size() > 0) {
-                Gdx.app.postRunnable(() -> {
-                    drawablesSelected(files);
-                });
-            }
-        });
     }
     
     private void customDrawableDialog() {
@@ -1782,10 +1629,6 @@ public class DialogDrawables extends Dialog {
                             Gdx.app.error(getClass().getName(), "Critical failure, could not roll back changes to drawables");
                         }
                     } else {
-                        if (main.getProjectData().areResourcesRelative()) {
-                            main.getProjectData().makeResourcesRelative();
-                        }
-                        
                         main.getProjectData().setChangesSaved(false);
                     }
                     
@@ -1798,148 +1641,6 @@ public class DialogDrawables extends Dialog {
     private void renameCustomDrawableDialog(DrawableData drawableData) {
         main.getDialogFactory().showCustomDrawableDialog(main.getSkin(), main.getStage(), drawableData, (String name1) -> {
             applyTintedDrawableSettings(drawableData, name1);
-        });
-    }
-
-    /**
-     * Called when a selection of drawables has been chosen from the
-     * newDrawablesDialog(). Adds the new drawables to the project.
-     * @param files
-     */
-    private void drawablesSelected(List<File> files) {
-        Array<FileHandle> fileHandles = new Array<>();
-        
-        files.forEach((file) -> {
-            fileHandles.add(new FileHandle(file));
-        });
-        
-        drawablesSelected(fileHandles);
-    }
-    
-    private void drawablesSelected(Array<FileHandle> files) {
-        main.getAtlasData().atlasCurrent = false;
-        Array<DrawableData> backup = new Array<>(main.getAtlasData().getDrawables());
-        Array<FileHandle> unhandledFiles = new Array<>();
-        Array<FileHandle> filesToProcess = new Array<>();
-        
-        main.getProjectData().setLastDrawablePath(files.get(0).parent().path() + "/");
-        for (FileHandle fileHandle : files) {
-            var duplicateDrawable = checkDuplicateDrawables(DrawableData.proper(fileHandle.name()), 0);
-            var duplicateFontDrawable = checkDuplicateFontDrawables(DrawableData.proper(fileHandle.name()), 0);
-            if (duplicateDrawable || duplicateFontDrawable) {
-                unhandledFiles.add(fileHandle);
-            } else {
-                filesToProcess.add(fileHandle);
-            }
-        }
-        
-        if (unhandledFiles.size > 0) {
-            showRemoveDuplicatesDialog(unhandledFiles, backup, filesToProcess);
-        } else {
-            finalizeDrawables(backup, filesToProcess);
-        }
-    }
-    
-    /**
-     * Shows a dialog to confirm removal of duplicate drawables that have the
-     * same name without extension. This is called after selecting new drawables.
-     * Does not delete existing style values that point to this drawable.
-     * @param unhandledFiles
-     * @param backup
-     * @param filesToProcess
-     */
-    private void showRemoveDuplicatesDialog(Array<FileHandle> unhandledFiles, Array<DrawableData> backup, Array<FileHandle> filesToProcess) {
-        Dialog dialog = new Dialog("Delete duplicates?", getSkin(), "bg"){
-            @Override
-            protected void result(Object object) {
-                if ((boolean) object) {
-                    for (FileHandle fileHandle : unhandledFiles) {
-                        removeDuplicateDrawables(DrawableData.proper(fileHandle.name()), false);
-                        if (!checkDuplicateFontDrawables(DrawableData.proper(fileHandle.name()), 0)) {
-                            filesToProcess.add(fileHandle);
-                        }
-                    }
-                }
-                finalizeDrawables(backup, filesToProcess);
-                main.getAtlasData().produceAtlas();
-                main.getRootTable().refreshPreview();
-            }
-        };
-        
-        dialog.getTitleTable().padLeft(5.0f);
-        dialog.getContentTable().padLeft(10.0f).padRight(10.0f).padTop(5.0f);
-        dialog.getButtonTable().padBottom(15.0f);
-        
-        var containsFontDrawable = false;
-        for (FileHandle fileHandle : unhandledFiles) {
-            if (checkDuplicateFontDrawables(DrawableData.proper(fileHandle.name()), 0)) {
-                containsFontDrawable = true;
-                break;
-            }
-        }
-        
-        if (containsFontDrawable) {
-            dialog.text("This operation will overwrite one or more drawables\n"
-                    + "Delete duplicates?\n\n"
-                    + "Note: drawables that overwrite drawables used by fonts can not be added.");
-        } else {
-            dialog.text("This operation will overwrite one or more drawables\n"
-                    + "Delete duplicates?");
-        }
-        
-        dialog.button("OK", true);
-        dialog.button("Cancel", false);
-        dialog.getButtonTable().getCells().first().getActor().addListener(main.getHandListener());
-        dialog.getButtonTable().getCells().get(1).getActor().addListener(main.getHandListener());
-        dialog.key(Input.Keys.ENTER, true);
-        dialog.key(Input.Keys.ESCAPE, false);
-        dialog.show(getStage());
-    }
-    
-    /**
-     * Adds the drawables to the project.
-     * @param backup If there is a failure, the drawable list will be rolled
-     * back to the provided backup.
-     * @param filesToProcess
-     */
-    private void finalizeDrawables(Array<DrawableData> backup, Array<FileHandle> filesToProcess) {
-        for (FileHandle file : filesToProcess) {
-            DrawableData data = new DrawableData(file);
-            if (Utils.isNinePatch(file.name())) {
-                data.type = DrawableType.NINE_PATCH;
-            } else {
-                data.type = DrawableType.TEXTURE;
-            }
-            if (!checkIfNameExists(data.name)) {
-                main.getAtlasData().getDrawables().add(data);
-            }
-        }
-        
-        gatherDrawables();
-
-        main.getDialogFactory().showDialogLoading(() -> {
-            Gdx.app.postRunnable(() -> {
-                if (!main.getAtlasData().produceAtlas()) {
-                    showDrawableError();
-                    Gdx.app.log(getClass().getName(), "Attempting to reload drawables backup...");
-                    main.getAtlasData().getDrawables().clear();
-                    main.getAtlasData().getDrawables().addAll(backup);
-                    gatherDrawables();
-                    if (main.getAtlasData().produceAtlas()) {
-                        Gdx.app.log(getClass().getName(), "Successfully rolled back changes to drawables");
-                    } else {
-                        Gdx.app.error(getClass().getName(), "Critical failure, could not roll back changes to drawables");
-                    }
-                } else {
-                    if (main.getProjectData().areResourcesRelative()) {
-                        main.getProjectData().makeResourcesRelative();
-                    }
-
-                    main.getProjectData().setChangesSaved(false);
-                }
-
-                sortBySelectedMode();
-            });
         });
     }
     

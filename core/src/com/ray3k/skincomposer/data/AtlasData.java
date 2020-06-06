@@ -232,20 +232,12 @@ public class AtlasData implements Json.Serializable {
             if (!files.contains(drawable.file, false)) {
                 files.add(drawable.file);
             }
-            
-            if (!main.getProjectData().resourceExists(drawable.file)) {
-                warnings.add("[RED]ERROR:[] Drawable file [BLACK]" + drawable.file + "[] does not exist.");
-            }
         }
         
         for (DrawableData drawable : drawables) {
             if (!drawable.customized) {
                 if (!files.contains(drawable.file, false)) {
                     files.add(drawable.file);
-                }
-
-                if (!main.getProjectData().resourceExists(drawable.file)) {
-                    warnings.add("[RED]ERROR:[] Drawable file [BLACK]" + drawable.file + "[] does not exist.");
                 }
             }
         }
@@ -278,17 +270,21 @@ public class AtlasData implements Json.Serializable {
 
     @Override
     public void write(Json json) {
-        json.writeValue("atlasCurrent", atlasCurrent);
-        json.writeValue("drawables", drawables, Array.class, DrawableData.class);
-        json.writeValue("fontDrawables", fontDrawables, Array.class, DrawableData.class);
+        var filteredDrawables = new Array<DrawableData>();
+        for (var drawable : drawables) {
+            if (drawable.type != DrawableType.TEXTURE && drawable.type != DrawableType.NINE_PATCH) {
+                filteredDrawables.add(drawable);
+            }
+        }
+        
+        json.writeValue("drawables", filteredDrawables, Array.class, DrawableData.class);
     }
 
     @Override
     public void read(Json json, JsonValue jsonData) {
-        atlasCurrent = json.readValue("atlasCurrent", Boolean.TYPE, jsonData);
+        atlasCurrent = false;
         drawables = json.readValue("drawables", Array.class, DrawableData.class, jsonData);
         assignDrawableTypes();
-        fontDrawables = json.readValue("fontDrawables", Array.class, DrawableData.class, new Array<DrawableData>(),jsonData);
     }
     
     private void assignDrawableTypes() {
